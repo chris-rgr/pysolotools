@@ -82,6 +82,28 @@ class Solo2YoloConverter:
         )
         Solo2YoloConverter._process_annotations(image_id, rgb_capture, labels_output)
 
+    def process_bbox_anotation_definition(self, output_path: str):
+        config_output = output_path / "config.yaml"
+        config_output.touch()
+
+        bounding_box_definition = None
+        for definition in self._solo.annotation_definitions.annotationDefinitions:
+            if definition.id == "bounding box":
+                bounding_box_definition = definition
+                break
+
+        classes_count = len(bounding_box_definition.spec)
+        classes_names = [label_spec.label_name for label_spec in bounding_box_definition.spec]
+
+        with open(str(config_output), "w") as f:
+            f.write("train: ./images/train\n")
+            f.write("val: ./images/val\n")
+            f.write("test: ./images/test\n")
+            f.write("nc: " + str(classes_count) + "\n")
+            f.write("names: " + str(classes_names) + "\n")
+
+    
+
     def convert(self, output_path: str):
         base_path = Path(output_path)
         images_output = base_path / "images"
@@ -90,6 +112,8 @@ class Solo2YoloConverter:
         labels_output.mkdir(parents=True, exist_ok=True)
 
         data_path = Path(self._solo.data_path)
+
+        self.process_bbox_anotation_definition(output_path)
 
         for idx, frame in enumerate(self._solo.frames()):
             self._pool.apply_async(
