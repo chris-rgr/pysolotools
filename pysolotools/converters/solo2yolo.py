@@ -2,6 +2,7 @@ import argparse
 import multiprocessing
 import shutil
 import sys
+import numpy as np
 from pathlib import Path
 
 from pysolotools.consumers import Solo
@@ -67,6 +68,21 @@ class Solo2YoloConverter:
                 )
                 f.write(f"{bbox.labelId} {x} {y} {w} {h}\n")
 
+
+    @staticmethod
+    def _generate_split_assignment(train_split, val_split, test_split, n_frames):
+        train_split = int(n_frames * train_split)
+        val_split = int(n_frames * val_split)
+        test_split = int(n_frames * test_split)
+
+        assignment_array = np.zeros(n_frames)
+        assignment_array[:train_split] = 0
+        assignment_array[train_split : train_split + val_split] = 1
+        assignment_array[train_split + val_split :] = 2
+        np.random.shuffle(assignment_array)
+
+        return assignment_array
+
     @staticmethod
     def _process_instances(frame: Frame, idx, images_output, labels_output, data_root):
         image_id = idx
@@ -104,21 +120,31 @@ class Solo2YoloConverter:
 
     
 
-    def convert(self, output_path: str):
+    def convert(self, output_path: str, train_split, val_split, test_split):
         base_path = Path(output_path)
+
         images_output = base_path / "images"
         labels_output = base_path / "labels"
+        split_suffixes = ["train", "val", "test"]
+
+        # Ensuring directories exist, also for the splits
         images_output.mkdir(parents=True, exist_ok=True)
         labels_output.mkdir(parents=True, exist_ok=True)
+        for split in split_suffixes:
+            (images_output / split).mkdir(parents=True, exist_ok=True)
+            (labels_output / split).mkdir(parents=True, exist_ok=True)
+
 
         data_path = Path(self._solo.data_path)
 
         self.process_bbox_anotation_definition(output_path)
 
-        for idx, frame in enumerate(self._solo.frames()):
+        for index, frame in enumerate(self._solo.frames()):
+            image_output_path = images_output / split_suffixes[index]
+            label_output_path = labels_output / split_suffixes[index]
             self._pool.apply_async(
                 self._process_instances,
-                args=(frame, idx, images_output, labels_output, data_path),
+                args=(frame, index, image_output_path, label_output_path, data_path),
             )
 
         self._pool.close()
@@ -134,6 +160,9 @@ def cli():
 
     parser.add_argument("solo_path")
     parser.add_argument("yolo_path")
+    parser.add_argument("training_split", type=float, default=0.8)
+    parser.add_argument("validation_split", type=float, default=0.1)
+    parser.add_argument("test_split", type=float, default=0.1)
 
     args = parser.parse_args(sys.argv[1:])
 
