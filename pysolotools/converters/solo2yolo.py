@@ -168,9 +168,13 @@ def cli():
 
     solo = Solo(args.solo_path)
 
+    training_split = args.training_split
+    validation_split = args.validation_split
+    test_split = args.test_split
+
     converter = Solo2YoloConverter(solo)
 
-    converter.convert(args.yolo_path)
+    converter.convert(args.yolo_path, training_split, validation_split, test_split)
 
 
 if __name__ == "__main__":
